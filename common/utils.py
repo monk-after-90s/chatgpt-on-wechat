@@ -4,6 +4,29 @@ import re
 from urllib.parse import urlparse
 from PIL import Image
 from common.log import logger
+import xml.sax.saxutils as saxutils
+
+
+def dict_to_xml(data: dict) -> str:
+    # 创建xml字符串
+    xml_str = "<xml>\n"
+
+    for key, value in data.items():
+        # 处理不需要CDATA的字段
+        if key in ["CreateTime", "MsgId", "AgentID"]:
+            xml_str += f"  <{key}>{value}</{key}>\n"
+        elif key == "Content":
+            # 对Content字段进行转义处理
+            escaped_content = saxutils.escape(value)
+            xml_str += f"  <{key}><![CDATA[{escaped_content}]]></{key}>\n"
+        else:
+            # 对其他字段使用CDATA
+            xml_str += f"  <{key}><![CDATA[{value}]]></{key}>\n"
+
+    xml_str += "</xml>"
+
+    return xml_str
+
 
 def fsize(file):
     if isinstance(file, io.BytesIO):

@@ -17,9 +17,12 @@ from channel.wechatcom.wechatcomapp_client import WechatComAppClient
 from channel.wechatcom.wechatcomapp_message import WechatComAppMessage
 from common.log import logger
 from common.singleton import singleton
-from common.utils import compress_imgfile, fsize, split_string_by_utf8_length, convert_webp_to_png, remove_markdown_symbol
+from common.utils import compress_imgfile, fsize, split_string_by_utf8_length, convert_webp_to_png, \
+    remove_markdown_symbol, dict_to_xml
 from config import conf, subscribe_msg
 from voice.audio_convert import any_to_amr, split_audio
+from wechatpy.utils import to_text
+import xmltodict
 
 MAX_UTF8_LEN = 2048
 
@@ -159,6 +162,20 @@ class Query:
         except (InvalidSignatureException, InvalidCorpIdException):
             raise web.Forbidden()
         msg = parse_message(message)
+        # 微信客服消息判断
+        if msg._data.get('Event', "") == 'kf_msg_or_event':
+            message_parsed = xmltodict.parse(to_text(message))['xml']
+            message_parsed_transfered = {
+                'AgentID': '',
+                'Content': message,
+                'CreateTime': message_parsed['CreateTime'],
+                'FromUserName': 'wechat_customer',
+                'MsgId': '',
+                'MsgType': 'text',
+                'ToUserName': message_parsed['ToUserName']
+            }
+            msg = parse_message(dict_to_xml(message_parsed_transfered))
+
         logger.debug("[wechatcom] receive message: {}, msg= {}".format(message, msg))
         if msg.type == "event":
             if msg.event == "subscribe":
