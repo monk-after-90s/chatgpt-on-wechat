@@ -291,6 +291,10 @@ volumes:
 
 <br>
 
+## 四、企微的微信客服
+
+按需配置，详见插件[WeChat-Customer-Service](https://github.com/monk-after-90s/WeChat-Customer-Service)。
+
 # 🔎 常见问题
 
 FAQs： <https://github.com/zhayujie/chatgpt-on-wechat/wiki/FAQs>
