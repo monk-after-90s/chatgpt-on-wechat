@@ -293,7 +293,7 @@ volumes:
 
 ## 四、企微的微信客服
 
-按需配置，详见插件[WeChat-Customer-Service](https://github.com/monk-after-90s/WeChat-Customer-Service)。
+按需配置，详见插件[WeChat-Customer-Service](https://gitee.excn.top/LLM/WeChat-Customer-Service)。
 
 # 🔎 常见问题
 
