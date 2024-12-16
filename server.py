@@ -43,15 +43,9 @@ class CoW:
         """在异步环境创建一个新实例，禁止直接调用类来创建"""
         cow = CoW()
         # 等待子进程创建完毕
-        process = await asyncio.create_subprocess_exec(
-            sys.executable, 'app.py',
-            stdout=asyncio.subprocess.PIPE,
-            stderr=asyncio.subprocess.PIPE,
-            # env={},
-            cwd="./"
-        )
-        cow._p = process
-        asyncio.create_task(cow._run())
+        wait_login_event = Event()
+        asyncio.create_task(cow._run(wait_login_event=wait_login_event))
+        await wait_login_event.wait()
         return cow
 
     def close(self):
@@ -87,9 +81,18 @@ class CoW:
             if q:
                 await q.put(line.decode().strip())
 
-    async def _run(self):
+    async def _run(self, *, wait_login_event: Event | None = None):
         """实例化进程"""
+        process = await asyncio.create_subprocess_exec(
+            sys.executable, 'app.py',
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+            # env={},
+            cwd="./"
+        )
         try:
+            self._p = process
+
             q = asyncio.Queue()
             asyncio.create_task(self._read_stream(self._p.stdout, q))
             asyncio.create_task(self._read_stream(self._p.stderr, q))
@@ -107,6 +110,9 @@ class CoW:
                     # 捕获连续的二维码链接
                     meet_qrcode = True
                     self.qrcodes.clear()
+
+                    if wait_login_event:
+                        wait_login_event.set()
                 elif meet_qrcode and line.startswith('https://'):
                     # 捕获连续的二维码链接
                     self.qrcodes.append(line)
@@ -134,10 +140,10 @@ class CoW:
                     self._status_code = -1
                     break
         finally:
-            if self._p.returncode is None:  # If the process is still running
-                self._p.terminate()  # You can also use kill() for a more forceful termination
+            if process.returncode is None:  # If the process is still running
+                process.terminate()  # You can also use kill() for a more forceful termination
                 try:
-                    await self._p.wait()
+                    await process.wait()
                 except Exception as e:
                     print(f"Error while waiting for process to terminate: {e}")
 
