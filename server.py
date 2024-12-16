@@ -1,5 +1,7 @@
+import os
 import re
 import sys
+from datetime import datetime, timedelta
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse
 from typing import List
@@ -37,6 +39,8 @@ class CoW:
         self._p: None | Process = None  # 子进程
         ## 日志
         self.log: str = ""
+        # 自动清理发生时间
+        self.auto_clear_datetime: datetime | None = None
 
     @classmethod
     async def create_cow(cls) -> "CoW":
@@ -65,7 +69,10 @@ class CoW:
             print(f"Error while waiting for process to terminate or kill: {e}")
 
         # 延迟清理字典
-        asyncio.get_running_loop().call_later(300, self._ensure_cow_popped)
+        delay_seconds = 300 if not os.environ.get("PYTHONUNBUFFERED") else 30
+        asyncio.get_running_loop().call_later(delay_seconds, self._ensure_cow_popped)
+        # 自动清发生的datetime
+        self.auto_clear_datetime = self.auto_clear_datetime or datetime.now() + timedelta(seconds=delay_seconds)
 
     @property
     def pid(self):
@@ -161,6 +168,7 @@ class CowItem(BaseModel):
     status_code: int
     qrcodes: List[str]
     log: str
+    auto_clear_datetime: datetime | None = None
 
 
 class ResponseItem(BaseModel):
@@ -183,7 +191,8 @@ async def create_cow():  # ToDo 从config.json拿出一些参数作为请求参�
                         data=CowItem(cow_id=cow.pid,
                                      status_code=cow.status_code,
                                      qrcodes=cow.qrcodes,
-                                     log=cow.log))
+                                     log=cow.log,
+                                     auto_clear_datetime=cow.auto_clear_datetime))
 
 
 @app.get("/cows/{cow_id}/", summary="获取CoW实例", response_model=ResponseItem)
@@ -199,7 +208,8 @@ def get_cow_status(cow_id: int):
                         data=CowItem(cow_id=cows[cow_id].pid,
                                      status_code=cows[cow_id].status_code,
                                      qrcodes=cows[cow_id].qrcodes,
-                                     log=cows[cow_id].log))
+                                     log=cows[cow_id].log,
+                                     auto_clear_datetime=cows[cow_id].auto_clear_datetime))
 
 
 @app.get("/cows/", summary="获取所有CoW实例", response_model=ResponseItem)
@@ -209,7 +219,8 @@ async def get_cows():
                         data=[CowItem(cow_id=cow.pid,
                                       status_code=cow.status_code,
                                       qrcodes=cow.qrcodes,
-                                      log=cow.log) for cow in cows.values()])
+                                      log=cow.log,
+                                      auto_clear_datetime=cow.auto_clear_datetime) for cow in cows.values()])
 
 
 @app.delete("/cows/{cow_id}/", summary="删除一个CoW实例")
