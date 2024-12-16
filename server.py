@@ -1,9 +1,9 @@
 import re
 from fastapi import FastAPI, HTTPException
-from pydantic import Field
 from typing import List
 import subprocess
 import threading
+from threading import Event
 
 app = FastAPI(title="CoW管理服务")
 
@@ -14,30 +14,41 @@ cows = {}
 class CoW:
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        # pid (int): Process ID of the CoW. Default is -1.
-        self.pid: int = -1
         # Status code indicating the state of the CoW.
         # 0 - 待登录
         # 1 - 工作中
         # -1 - 已死亡
         self._status_code = -1
         # List of URLs for login QR codes. Default is an empty list.
-        self.qrcodes: List[str] = Field(default_factory=list)
-        # 在子线程启动子进程初始化
-        self._p: subprocess.Popen | None = None
-        self._t = threading.Thread(target=self._run)
+        self.qrcodes: List[str] = []
         # 是否关闭状态
         self._is_closed = False
+        # 启动
+        self._p: subprocess.Popen | None = None  # 子进程
+        self._pid_event = Event()
+        self._t: None | threading.Thread = threading.Thread(target=self._run)  # 子线程
+        self._t.start()
+        # 等待子线程中的子进程启动
+        self._pid_event.wait()
+        assert self._p
 
     def close(self):
         "优雅关闭"
         self._is_closed = True
+        cows.pop(self.pid)
         self._p.kill()
+
+    @property
+    def pid(self):
+        if self._p:
+            return self._p.pid
+        else:
+            return -1
 
     @property
     def status_code(self) -> int:
         # 无效进程
-        if self.pid == -1:
+        if not self._p:
             return -1
         # 已死进程
         if self._p.poll() is not None:
@@ -46,7 +57,6 @@ class CoW:
 
     def _run(self):
         """实例化进程"""
-        assert self.pid == -1
         assert self._status_code == -1
         assert self.qrcodes == []
 
@@ -57,8 +67,8 @@ class CoW:
                               stderr=subprocess.PIPE,
                               cwd="./",
                               text=True) as process:
-            self.pid = process.pid
             self._p = process
+            self._pid_event.set()
             # 实时读取标准输出
             meet_qrcode = False
             while True:
@@ -103,81 +113,15 @@ class CoW:
                         self._status_code = -1
                         process.kill()
                         break
-            # 捕获任何可能的标准错误输出
-            stderr = process.stderr.read()
-            if stderr:
-                print("标准错误:", stderr)
 
 
-@app.post("/cow/", response_model=CoW, summary="创建一个新的CoW")
+@app.post("/cow/", summary="创建一个新的CoW")
 def create_cow():
     """
     创建一个新的CoW进程实例。
 
-    返回值:
-        CoW: 创建的CoW对象。
+    返回值: CoW id。
     """
-
-    return cow
-
-
-@app.get("/cow/{pid}", response_model=CoW, summary="通过PID获取CoW信息")
-def read_cow(pid: int):
-    """
-    通过进程ID获取CoW条目。
-
-    参数:
-        pid (int): CoW的进程ID。
-
-    返回值:
-        CoW: 对应的CoW对象。
-    """
-    if pid not in cows:
-        raise HTTPException(status_code=404, detail="CoW未找到")
-    return cows[pid]
-
-
-@app.put("/cow/{pid}", response_model=CoW, summary="通过PID更新CoW信息")
-def update_cow(pid: int, cow: CoW):
-    """
-    通过进程ID更新现有的CoW条目。
-
-    参数:
-        pid (int): CoW的进程ID。
-        cow (CoW): 更新后的CoW对象。
-
-    返回值:
-        CoW: 更新后的CoW对象。
-    """
-    if pid not in cows:
-        raise HTTPException(status_code=404, detail="CoW未找到")
-    cows[pid] = cow
-    return cow
-
-
-@app.delete("/cow/{pid}", summary="通过PID删除CoW")
-def delete_cow(pid: int):
-    """
-    通过进程ID删除CoW条目。
-
-    参数:
-        pid (int): CoW的进程ID。
-
-    返回值:
-        dict: 成功删除的消息。
-    """
-    if pid not in cows:
-        raise HTTPException(status_code=404, detail="CoW未找到")
-    del cows[pid]
-    return {"detail": "CoW已删除"}
-
-
-@app.get("/cow/", response_model=List[CoW], summary="列出所有CoW")
-def list_cows():
-    """
-    列出数据库中的所有CoW条目。
-
-    返回值:
-        List[CoW]: 所有CoW对象的列表。
-    """
-    return list(cows.values())
+    cow = CoW()
+    cows[cow.pid] = cow
+    return cow.pid
