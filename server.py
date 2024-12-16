@@ -108,7 +108,7 @@ class CoW:
                         )
                         if re.fullmatch(pattern, output):
                             self._status_code = 1
-                    # 已死亡
+                    # 已死亡 todo 延时自动关闭
                     if self._status_code == 0 and '''Unexpected sync check result: window.synccheck={retcode:"1102",selector:"0"}''' in output:
                         self._status_code = -1
                         process.kill()
