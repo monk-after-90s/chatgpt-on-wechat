@@ -1,6 +1,6 @@
 import re
 from fastapi import FastAPI, HTTPException
-from pydantic import BaseModel, Field
+from pydantic import Field
 from typing import List
 import subprocess
 import threading
@@ -11,25 +11,18 @@ app = FastAPI(title="CoW管理服务")
 cows = {}
 
 
-class CoW(BaseModel):
-    """
-    Represents a CoW (Cow) with specific attributes.
-
-    Attributes:
-        pid (int): Process ID of the CoW. Default is -1.
-        status_code (int): Status code indicating the state of the CoW.
-            0 - 待登录
-            1 - 工作中
-            -1 - 已死亡
-        qrcodes (List[str]): List of URLs for login QR codes. Default is an empty list.
-    """
-    pid: int = -1
-    # status_code: int = -1
-    qrcodes: List[str] = Field(default_factory=list)
-
+class CoW:
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
+        # pid (int): Process ID of the CoW. Default is -1.
+        self.pid: int = -1
+        # Status code indicating the state of the CoW.
+        # 0 - 待登录
+        # 1 - 工作中
+        # -1 - 已死亡
         self._status_code = -1
+        # List of URLs for login QR codes. Default is an empty list.
+        self.qrcodes: List[str] = Field(default_factory=list)
         # 在子线程启动子进程初始化
         self._p: subprocess.Popen | None = None
         self._t = threading.Thread(target=self._run)
