@@ -1,5 +1,6 @@
 import re
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.responses import JSONResponse
 from typing import List
 import subprocess
 import threading
@@ -9,6 +10,14 @@ app = FastAPI(title="CoW管理服务")
 
 # 模拟数据库
 cows: dict[int, "CoW"] = {}
+
+
+@app.exception_handler(404)
+async def custom_404_handler(request: Request, exc):
+    return JSONResponse(
+        status_code=404,
+        content={"code": 404, "msg": "Not Found"}
+    )
 
 
 class CoW:
@@ -137,8 +146,7 @@ def get_cow_status(cow_id: int):
     获取指定CoW的运行状态。
     """
     if cow_id not in cows:
-        raise HTTPException(status_code=404,
-                            detail={"code": 404, "msg": "cow_id not found"})
+        raise HTTPException(status_code=404)
 
     return {"code": 200,
             "msg": "success",
