@@ -129,7 +129,7 @@ class CoW:
 
 
 @app.post("/cow/", summary="创建一个新的CoW")
-def create_cow():
+def create_cow():  # ToDo 从config.json拿出一些参数作为请求参数
     """
     创建一个新的CoW进程实例。
 
