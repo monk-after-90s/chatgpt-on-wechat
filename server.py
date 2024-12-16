@@ -1,10 +1,12 @@
 import re
+import sys
+
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse
 from typing import List
-import subprocess
-import threading
-from threading import Event
+from asyncio import Event
+from asyncio.subprocess import Process
+import asyncio
 
 app = FastAPI(title="CoW管理服务")
 
@@ -32,23 +34,31 @@ class CoW:
         self.qrcodes: List[str] = []
         # 是否关闭状态
         self._is_closed = False
-        # 启动
-        self._p: subprocess.Popen | None = None  # 子进程
+        self._p: None | Process = None  # 子进程
         ## 日志
         self.log: str = ""
-        ## 线程中子进程创建完毕事件
-        self._pid_event = Event()
-        self._t: None | threading.Thread = threading.Thread(target=self._run)  # 子线程
-        self._t.start()
-        # 等待子线程中的子进程启动
-        self._pid_event.wait()
-        assert self._p
+
+    @classmethod
+    async def create_cow(cls) -> "CoW":
+        """在异步环境创建一个新实例，禁止直接调用类来创建"""
+        cow = CoW()
+        # 等待子进程创建完毕
+        process = await asyncio.create_subprocess_exec(
+            sys.executable, 'app.py',
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+            # env={},
+            cwd="./"
+        )
+        cow._p = process
+        asyncio.create_task(cow._run())
+        return cow
 
     def close(self):
         "优雅关闭"
         self._is_closed = True
         cows.pop(self.pid)
-        self._p.kill()
+        self._p.terminate()
 
     @property
     def pid(self):
@@ -61,81 +71,85 @@ class CoW:
     def status_code(self) -> int:
         # 无效进程
         if not self._p:
-            return -1
+            code = -1
         # 已死进程
-        if self._p.poll() is not None:
-            return -1
-        return self._status_code
+        if self._p.returncode is not None:
+            code = -1
+        code = self._status_code
+        return code
 
-    def _run(self):
+    @staticmethod
+    async def _read_stream(stream, q: None | asyncio.Queue[str] = None):
+        while True:
+            line = await stream.readline()
+            if not line:
+                break
+            if q:
+                await q.put(line.decode().strip())
+
+    async def _run(self):
         """实例化进程"""
-        assert self._status_code == -1
-        assert self.qrcodes == []
-
-        if self._is_closed: return
-        # 使用Popen启动子进程，并设置stdout为PIPE以捕获输出
-        with subprocess.Popen(["python", "app.py"],
-                              stdout=subprocess.PIPE,
-                              stderr=subprocess.PIPE,
-                              cwd="./",
-                              text=True) as process:
-            self._p = process
-            self._pid_event.set()
+        try:
+            q = asyncio.Queue()
+            asyncio.create_task(self._read_stream(self._p.stdout, q))
+            asyncio.create_task(self._read_stream(self._p.stderr, q))
             # 实时读取标准输出
             meet_qrcode = False
             while True:
-                stdout = process.stdout.readline()
-                stdout = stdout.strip()
-                stderr = process.stderr.readline()
-                stderr = stderr.strip()
-                output = (stdout + "\n" + stderr).strip()
+                line = await q.get()
+                # 更新日志
+                self.log += line + "\n"
+                self.log = self.log[-10000:]
+                ################状态更新区################
+                if line == 'You can also scan QRCode in any website below:':
+                    # 待登录
+                    self._status_code = 0
+                    # 捕获连续的二维码链接
+                    meet_qrcode = True
+                    self.qrcodes.clear()
+                elif meet_qrcode and line.startswith('https://'):
+                    # 捕获连续的二维码链接
+                    self.qrcodes.append(line)
+                else:
+                    # 连续的二维码链接结束
+                    meet_qrcode = False
 
-                if process.poll() is not None:
-                    break
-                if output:
-                    output = output.strip()
-                    # 更新日志
-                    self.log += output + "\n"
-                    self.log = self.log[-10000:]
-                    ################状态更新区################
-                    if output == 'You can also scan QRCode in any website below:':
-                        # 待登录
-                        self._status_code = 0
-                        # 捕获连续的二维码链接
-                        meet_qrcode = True
+                if self._status_code == 0:
+                    pattern = (
+                        r"\[INFO\]\["  # 固定部分 [INFO][
+                        r"\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\]\["  # 时间部分
+                        r"wechat_channel\.py:\d+\] - "  # 文件名和行号
+                        r"Wechat login success, user_id: @"  # 固定文本
+                        r"[a-f0-9]+, nickname: .+"  # 用户ID和昵称部分
+                    )
+                    if re.fullmatch(pattern, line):
+                        # 工作中
+                        self._status_code = 1
                         self.qrcodes.clear()
-                    elif meet_qrcode and output.startswith('https://'):
-                        # 捕获连续的二维码链接
-                        self.qrcodes.append(output)
-                    else:
-                        # 连续的二维码链接结束
-                        meet_qrcode = False
-                    # 工作中
-                    if self._status_code == 0:
-                        pattern = (
-                            r"\[INFO\]\["  # 固定部分 [INFO][
-                            r"\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\]\["  # 时间部分
-                            r"wechat_channel\.py:\d+\] - "  # 文件名和行号
-                            r"Wechat login success, user_id: @"  # 固定文本
-                            r"[a-f0-9]+, nickname: .+"  # 用户ID和昵称部分
-                        )
-                        if re.fullmatch(pattern, output):
-                            self._status_code = 1
-                    # 已死亡 todo 延时自动关闭
-                    if self._status_code == 0 and '''Unexpected sync check result: window.synccheck={retcode:"1102",selector:"0"}''' in output:
-                        self._status_code = -1
-                        process.kill()
-                        break
+                    # elif "Please press confirm on your phone." ==line:
+                    #     self._status_code = -1
+
+                # 已死亡 todo 延时自动关闭
+                if self._status_code == 1 and '''Unexpected sync check result: window.synccheck={retcode:"1102",selector:"0"}''' in line:
+                    self._status_code = -1
+                    break
+        finally:
+            if self._p.returncode is None:  # If the process is still running
+                self._p.terminate()  # You can also use kill() for a more forceful termination
+                try:
+                    await self._p.wait()
+                except Exception as e:
+                    print(f"Error while waiting for process to terminate: {e}")
 
 
 @app.post("/cow/", summary="创建一个新的CoW")
-def create_cow():  # ToDo 从config.json拿出一些参数作为请求参数
+async def create_cow():  # ToDo 从config.json拿出一些参数作为请求参数
     """
     创建一个新的CoW进程实例。
 
     返回值: CoW id。
     """
-    cow = CoW()
+    cow = await CoW.create_cow()
     cows[cow.pid] = cow
     return {"code": 200, "msg": "success", "data": {"cow_id": cow.pid}}
 
