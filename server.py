@@ -116,7 +116,7 @@ class CoW(BaseModel):
                 print("标准错误:", stderr)
 
 
-@app.post("/cows/", response_model=CoW, summary="创建一个新的CoW")
+@app.post("/cow/", response_model=CoW, summary="创建一个新的CoW")
 def create_cow():
     """
     创建一个新的CoW进程实例。
@@ -128,7 +128,7 @@ def create_cow():
     return cow
 
 
-@app.get("/cows/{pid}", response_model=CoW, summary="通过PID获取CoW信息")
+@app.get("/cow/{pid}", response_model=CoW, summary="通过PID获取CoW信息")
 def read_cow(pid: int):
     """
     通过进程ID获取CoW条目。
@@ -144,7 +144,7 @@ def read_cow(pid: int):
     return cows[pid]
 
 
-@app.put("/cows/{pid}", response_model=CoW, summary="通过PID更新CoW信息")
+@app.put("/cow/{pid}", response_model=CoW, summary="通过PID更新CoW信息")
 def update_cow(pid: int, cow: CoW):
     """
     通过进程ID更新现有的CoW条目。
@@ -162,7 +162,7 @@ def update_cow(pid: int, cow: CoW):
     return cow
 
 
-@app.delete("/cows/{pid}", summary="通过PID删除CoW")
+@app.delete("/cow/{pid}", summary="通过PID删除CoW")
 def delete_cow(pid: int):
     """
     通过进程ID删除CoW条目。
@@ -179,7 +179,7 @@ def delete_cow(pid: int):
     return {"detail": "CoW已删除"}
 
 
-@app.get("/cows/", response_model=List[CoW], summary="列出所有CoW")
+@app.get("/cow/", response_model=List[CoW], summary="列出所有CoW")
 def list_cows():
     """
     列出数据库中的所有CoW条目。
