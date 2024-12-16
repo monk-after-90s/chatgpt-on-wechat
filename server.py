@@ -25,6 +25,9 @@ class CoW:
         self._is_closed = False
         # 启动
         self._p: subprocess.Popen | None = None  # 子进程
+        ## 日志
+        self.log: str = ""
+        ## 线程中子进程创建完毕事件
         self._pid_event = Event()
         self._t: None | threading.Thread = threading.Thread(target=self._run)  # 子线程
         self._t.start()
@@ -76,14 +79,15 @@ class CoW:
                 stdout = stdout.strip()
                 stderr = process.stderr.readline()
                 stderr = stderr.strip()
-                assert not (stdout and stderr)
-                output = stdout or stderr
+                output = (stdout + "\n" + stderr).strip()
 
                 if process.poll() is not None:
                     break
                 if output:
                     output = output.strip()
-                    print(output)
+                    # 更新日志
+                    self.log += output + "\n"
+                    self.log = self.log[-10000:]
                     ################状态更新区################
                     if output == 'You can also scan QRCode in any website below:':
                         # 待登录
@@ -125,3 +129,16 @@ def create_cow():
     cow = CoW()
     cows[cow.pid] = cow
     return cow.pid
+
+
+@app.get("/cow/log/", summary="获取CoW的日志")
+def get_cow_log(cow_id: int):
+    """
+    获取指定CoW的日志。
+
+    参数:
+    - cow_id: CoW的ID。
+
+    返回值: CoW的日志。
+    """
+    return cows[cow_id].log
