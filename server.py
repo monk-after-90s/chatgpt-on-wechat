@@ -128,7 +128,7 @@ def create_cow():
     """
     cow = CoW()
     cows[cow.pid] = cow
-    return cow.pid
+    return {"code": 200, "msg": "success", "data": {"cow_id": cow.pid}}
 
 
 @app.get("/cow/log/", summary="获取CoW的日志")
