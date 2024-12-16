@@ -8,7 +8,7 @@ from threading import Event
 app = FastAPI(title="CoW管理服务")
 
 # 模拟数据库
-cows = {}
+cows: dict[int, "CoW"] = {}
 
 
 class CoW:
@@ -131,14 +131,15 @@ def create_cow():
     return {"code": 200, "msg": "success", "data": {"cow_id": cow.pid}}
 
 
-@app.get("/cow/log/", summary="获取CoW的日志")
-def get_cow_log(cow_id: int):
+@app.get("/cow/status/", summary="获取CoW的状态")
+def get_cow_status(cow_id: int):
     """
-    获取指定CoW的日志。
-
-    参数:
-    - cow_id: CoW的ID。
-
-    返回值: CoW的日志。
+    获取指定CoW的运行状态。
     """
-    return cows[cow_id].log
+    if cow_id not in cows:
+        raise HTTPException(status_code=404,
+                            detail={"code": 404, "msg": "cow_id not found"})
+
+    return {"code": 200,
+            "msg": "success",
+            "data": {"status": cows[cow_id].status_code, "qrcodes": cows[cow_id].qrcodes, "log": cows[cow_id].log}}
