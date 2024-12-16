@@ -1,12 +1,12 @@
 import re
 import sys
-
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse
 from typing import List
 from asyncio import Event
 from asyncio.subprocess import Process
 import asyncio
+from pydantic import BaseModel
 
 app = FastAPI(title="CoW管理服务")
 
@@ -48,11 +48,24 @@ class CoW:
         await wait_login_event.wait()
         return cow
 
-    def close(self):
-        "优雅关闭"
+    def _ensure_cow_popped(self):
+        """清理字典"""
+        if self.pid in cows: cows.pop(self.pid)
+        print("cow popped", self.pid)
+
+    async def close(self):
+        """优雅关闭"""
         self._is_closed = True
-        cows.pop(self.pid)
-        self._p.terminate()
+        self._p and self._p.returncode is None and self._p.terminate()
+        await asyncio.sleep(1)
+        self._p and self._p.returncode is None and self._p.kill()
+        try:
+            self._p and self._p.returncode is None and await self._p.wait()
+        except Exception as e:
+            print(f"Error while waiting for process to terminate or kill: {e}")
+
+        # 延迟清理字典
+        asyncio.get_running_loop().call_later(300, self._ensure_cow_popped)
 
     @property
     def pid(self):
@@ -135,20 +148,28 @@ class CoW:
                     # elif "Please press confirm on your phone." ==line:
                     #     self._status_code = -1
 
-                # 已死亡 todo 延时自动关闭
-                if self._status_code == 1 and '''Unexpected sync check result: window.synccheck={retcode:"1102",selector:"0"}''' in line:
+                # 已死亡
+                if self._status_code == 1 and '''Unexpected sync check result: window.synccheck''' in line:
                     self._status_code = -1
                     break
         finally:
-            if process.returncode is None:  # If the process is still running
-                process.terminate()  # You can also use kill() for a more forceful termination
-                try:
-                    await process.wait()
-                except Exception as e:
-                    print(f"Error while waiting for process to terminate: {e}")
+            await self.close()
 
 
-@app.post("/cow/", summary="创建一个新的CoW")
+class CowItem(BaseModel):
+    cow_id: int
+    status_code: int
+    qrcodes: List[str]
+    log: str
+
+
+class ResponseItem(BaseModel):
+    code: int
+    msg: str
+    data: CowItem | List[CowItem] | None = None
+
+
+@app.post("/cows/", summary="创建一个新的CoW", response_model=ResponseItem)
 async def create_cow():  # ToDo 从config.json拿出一些参数作为请求参数
     """
     创建一个新的CoW进程实例。
@@ -157,10 +178,15 @@ async def create_cow():  # ToDo 从config.json拿出一些参数作为请求参�
     """
     cow = await CoW.create_cow()
     cows[cow.pid] = cow
-    return {"code": 200, "msg": "success", "data": {"cow_id": cow.pid}}
+    return ResponseItem(code=200,
+                        msg="success",
+                        data=CowItem(cow_id=cow.pid,
+                                     status_code=cow.status_code,
+                                     qrcodes=cow.qrcodes,
+                                     log=cow.log))
 
 
-@app.get("/cow/status/", summary="获取CoW的状态")
+@app.get("/cows/{cow_id}/", summary="获取CoW实例", response_model=ResponseItem)
 def get_cow_status(cow_id: int):
     """
     获取指定CoW的运行状态。
@@ -168,6 +194,33 @@ def get_cow_status(cow_id: int):
     if cow_id not in cows:
         raise HTTPException(status_code=404)
 
-    return {"code": 200,
-            "msg": "success",
-            "data": {"status": cows[cow_id].status_code, "qrcodes": cows[cow_id].qrcodes, "log": cows[cow_id].log}}
+    return ResponseItem(code=200,
+                        msg="success",
+                        data=CowItem(cow_id=cows[cow_id].pid,
+                                     status_code=cows[cow_id].status_code,
+                                     qrcodes=cows[cow_id].qrcodes,
+                                     log=cows[cow_id].log))
+
+
+@app.get("/cows/", summary="获取所有CoW实例", response_model=ResponseItem)
+async def get_cows():
+    return ResponseItem(code=200,
+                        msg="success",
+                        data=[CowItem(cow_id=cow.pid,
+                                      status_code=cow.status_code,
+                                      qrcodes=cow.qrcodes,
+                                      log=cow.log) for cow in cows.values()])
+
+
+@app.delete("/cows/{cow_id}/", summary="删除一个CoW实例")
+async def delete_cow(cow_id: int):
+    """
+    删除一个CoW实例。
+    """
+    if cow_id not in cows:
+        raise HTTPException(status_code=404)
+
+    cow = cows[cow_id]
+    await cow.close()
+    del cows[cow_id]
+    return ResponseItem(code=200, msg="success", data=None)
