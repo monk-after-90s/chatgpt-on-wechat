@@ -74,7 +74,8 @@ class CoW:
         delay_seconds = 300 if not os.environ.get("PYTHONUNBUFFERED") else 30
         asyncio.get_running_loop().call_later(delay_seconds, self._ensure_cow_popped)
         # 自动清发生的datetime
-        self.auto_clear_datetime = self.auto_clear_datetime or datetime.now() + timedelta(seconds=delay_seconds)
+        self.auto_clear_datetime = \
+            self.auto_clear_datetime or datetime.now().astimezone() + timedelta(seconds=delay_seconds)
 
     @property
     def pid(self):
