@@ -21,6 +21,7 @@ cows: dict[int, "CoW"] = {}
 class Model404(BaseModel):
     msg: str = Field(default="Not Found")
     code: int = Field(default=404)
+    data: dict = Field(default_factory=dict)
 
 
 @app.exception_handler(404)
