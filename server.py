@@ -18,11 +18,16 @@ app = FastAPI(title="CoW（chatgpt-on-wechat）管理服务")
 cows: dict[int, "CoW"] = {}
 
 
+class Model404(BaseModel):
+    msg: str = Field(default="Not Found")
+    code: int = Field(default=404)
+
+
 @app.exception_handler(404)
 async def custom_404_handler(request: Request, exc):
     return JSONResponse(
         status_code=404,
-        content={"code": 404, "msg": "Not Found"}
+        content=Model404().model_dump()
     )
 
 
@@ -427,7 +432,11 @@ async def create_cow(cow_config: CoWConfig):
                                      auto_clear_datetime=cow.auto_clear_datetime))
 
 
-@app.get("/cows/{cow_id}/", summary="获取CoW实例", response_model=ResponseItem)
+@app.get("/cows/{cow_id}/", summary="获取CoW实例",
+         responses={
+             "200": {"description": "取得目标CoW", "model": ResponseItem},
+             "404": {"description": "未找到目标CoW", "model": Model404}
+         })
 def get_cow_status(cow_id: int):
     """
     获取指定CoW的运行信息。
@@ -458,10 +467,13 @@ async def get_cows():
                                       auto_clear_datetime=cow.auto_clear_datetime) for cow in cows.values()])
 
 
-@app.delete("/cows/{cow_id}/", summary="删除一个CoW实例")
+@app.delete("/cows/{cow_id}/", summary="删除一个CoW实例", responses={
+    "200": {"description": "取得目标CoW", "model": ResponseItem},
+    "404": {"description": "未找到目标CoW", "model": Model404}
+})
 async def delete_cow(cow_id: int):
     """
-    删除一个CoW实例。
+    立即删除并清理一个CoW实例。
     """
     if cow_id not in cows:
         raise HTTPException(status_code=404)
