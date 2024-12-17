@@ -2,6 +2,8 @@ import os
 import re
 import sys
 from datetime import datetime, timedelta
+from enum import Enum
+
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse
 from asyncio import Event
@@ -10,7 +12,7 @@ import asyncio
 from pydantic import BaseModel, Field
 from typing import List, Optional
 
-app = FastAPI(title="CoW管理服务")  # todo 完善文档˚
+app = FastAPI(title="CoW（chatgpt-on-wechat）管理服务")
 
 # 模拟数据库
 cows: dict[int, "CoW"] = {}
@@ -176,18 +178,26 @@ class CoW:
             await self.close()
 
 
+# 使用 Enum 定义 status_code 的合法值
+class StatusCodeEnum(int, Enum):
+    DEAD = -1  # 已死亡
+    TO_LOGIN = 0  # 待登录
+    WORKING = 1  # 工作中
+
+
 class CowItem(BaseModel):
-    cow_id: int
-    status_code: int
-    qrcodes: List[str]
-    log: str
-    auto_clear_datetime: datetime | None = None
+    cow_id: int = Field(..., description="CoW id")
+    status_code: StatusCodeEnum = Field(..., description="CoW实例状态码：-1 已死亡，0 待登录，1 工作中")
+    qrcodes: List[str] = Field(default_factory=list, description="二维码链接列表")
+    log: str = Field("", description="日志")
+    auto_clear_datetime: datetime | None = Field(None, description="如果一个CoW已死亡，它的自动清理时间")
 
 
 class CoWConfig(BaseModel):
     # openai api配置
-    open_ai_api_key: str = Field("", description="OpenAI API key")
-    open_ai_api_base: str = Field("https://api.openai.com/v1", description="OpenAI API base URL")
+    open_ai_api_key: str = Field("", description="OpenAI API兼容的LLM服务的Api Key")
+    open_ai_api_base: str = Field("https://api.openai.com/v1",
+                                  description="OpenAI API兼容的LLM服务的base URL，以“/v1”结尾")
     proxy: Optional[str] = Field(None, description="Proxy for OpenAI requests")
 
     # chatgpt模型
@@ -395,15 +405,16 @@ class CoWConfig(BaseModel):
 
 
 class ResponseItem(BaseModel):
-    code: int
-    msg: str
-    data: CowItem | List[CowItem] | None = None
+    code: int = Field(200, description="Response code")
+    msg: str = Field("success", description="Response message")
+    data: CowItem | List[CowItem] | None = Field(None, description="Response data")
 
 
 @app.post("/cows/", summary="创建一个新的CoW", response_model=ResponseItem)
 async def create_cow(cow_config: CoWConfig):
     """
-    创建一个新的CoW进程实例。
+    创建一个新的CoW进程实例。通常只需要传**open_ai_api_key**、**open_ai_api_base**和**model**。对于智能体平台如fastgpt则不需要**model**。
+    各参数解释详见请求体Schema各字段解释，或者查看[chatgpt-on-wechat config.py文件](https://github.com/zhayujie/chatgpt-on-wechat/blob/16324e72837b9898dfaca76897cdcdb27044dc06/config.py#L13)。
     """
     cow = await CoW.create_cow(cow_config.model_dump())
     cows[cow.pid] = cow
