@@ -188,9 +188,9 @@ class StatusCodeEnum(int, Enum):
 class CowItem(BaseModel):
     cow_id: int = Field(..., description="CoW id")
     status_code: StatusCodeEnum = Field(..., description="CoW实例状态码：-1 已死亡，0 待登录，1 工作中")
-    qrcodes: List[str] = Field(default_factory=list, description="二维码链接列表")
+    qrcodes: List[str] = Field(default_factory=list, description="二维码链接列表，用于手机微信扫码登录")
     log: str = Field("", description="日志")
-    auto_clear_datetime: datetime | None = Field(None, description="如果一个CoW已死亡，它的自动清理时间")
+    auto_clear_datetime: datetime | None = Field(None, description="已死亡CoW实例的自动清理时间")
 
 
 class CoWConfig(BaseModel):
@@ -430,7 +430,7 @@ async def create_cow(cow_config: CoWConfig):
 @app.get("/cows/{cow_id}/", summary="获取CoW实例", response_model=ResponseItem)
 def get_cow_status(cow_id: int):
     """
-    获取指定CoW的运行状态。
+    获取指定CoW的运行信息。
     """
     if cow_id not in cows:
         raise HTTPException(status_code=404)
@@ -446,6 +446,9 @@ def get_cow_status(cow_id: int):
 
 @app.get("/cows/", summary="获取所有CoW实例", response_model=ResponseItem)
 async def get_cows():
+    """
+    响应格式详看响应体Schema。
+    """
     return ResponseItem(code=200,
                         msg="success",
                         data=[CowItem(cow_id=cow.pid,
