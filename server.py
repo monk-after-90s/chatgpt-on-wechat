@@ -33,7 +33,7 @@ class CoW:
         # 0 - 待登录
         # 1 - 工作中
         # -1 - 已死亡
-        self._status_code = -1
+        self._status_code: StatusCodeEnum = StatusCodeEnum.DEAD
         # List of URLs for login QR codes. Default is an empty list.
         self.qrcodes: List[str] = []
         # 是否关闭状态
@@ -85,15 +85,14 @@ class CoW:
             return -1
 
     @property
-    def status_code(self) -> int:
+    def status_code(self) -> "StatusCodeEnum":
         # 无效进程
         if not self._p:
-            code = -1
+            return StatusCodeEnum.DEAD
         # 已死进程
         if self._p.returncode is not None:
-            code = -1
-        code = self._status_code
-        return code
+            return StatusCodeEnum.DEAD
+        return self._status_code
 
     @staticmethod
     async def _read_stream(stream, q: None | asyncio.Queue[str] = None):
@@ -139,7 +138,7 @@ class CoW:
                 ################状态更新区################
                 if line == 'You can also scan QRCode in any website below:':
                     # 待登录
-                    self._status_code = 0
+                    self._status_code = StatusCodeEnum.TO_LOGIN
                     # 捕获连续的二维码链接
                     meet_qrcode = True
                     self.qrcodes.clear()
@@ -153,7 +152,7 @@ class CoW:
                     # 连续的二维码链接结束
                     meet_qrcode = False
 
-                if self._status_code == 0:
+                if self._status_code == StatusCodeEnum.TO_LOGIN:
                     pattern = (
                         r"\[INFO\]\["  # 固定部分 [INFO][
                         r"\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\]\["  # 时间部分
@@ -163,17 +162,17 @@ class CoW:
                     )
                     if re.fullmatch(pattern, line):
                         # 工作中
-                        self._status_code = 1
+                        self._status_code = StatusCodeEnum.WORKING
                         self.qrcodes.clear()
                     # elif "Please press confirm on your phone." ==line:
                     #     self._status_code = -1
 
                 # 已死亡
-                if self._status_code == 1 and '''Unexpected sync check result: window.synccheck''' in line:
+                if self._status_code == StatusCodeEnum.WORKING and '''Unexpected sync check result: window.synccheck''' in line:
                     pattern = r'Unexpected sync check result: window\.synccheck=\{retcode:"(\d+)",selector:"(\d+)"\}'
                     match = re.search(pattern, line)
                     if match:
-                        self._status_code = -1
+                        self._status_code = StatusCodeEnum.DEAD
                         break
         finally:
             await self.close()
