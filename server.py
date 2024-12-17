@@ -156,7 +156,7 @@ class CoW:
                     #     self._status_code = -1
 
                 # 已死亡
-                if self._status_code == 1 and '''Unexpected sync check result: window.synccheck''' in line:
+                if self._status_code == 1 and '''Unexpected sync check result: window.synccheck''' in line:  # todo 使用正则
                     self._status_code = -1
                     break
         finally:
