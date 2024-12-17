@@ -195,7 +195,7 @@ class CowItem(BaseModel):
     cow_id: int = Field(..., description="CoW id")
     status_code: StatusCodeEnum = Field(..., description="CoW实例状态码：-1 已死亡，0 待登录，1 工作中")
     qrcodes: List[str] = Field(default_factory=list,
-                               description="二维码链接列表，用于手机微信扫码登录，只在“待登录”状态才会有。注意！“待登录”状态持续太久的话，过几分钟这个列表就会刷新，而老的链接上的二维码会失效，需要重新请求获得最新二维码链接。")
+                               description="二维码链接列表，任何一个都可以用于手机微信扫码登录，只在“待登录”状态才会有。注意！“待登录”状态持续太久的话，过几分钟这个列表就会刷新，而老的链接上的二维码会失效，需要重新请求获得最新二维码链接。")
     log: str = Field("", description="日志")
     auto_clear_datetime: datetime | None = Field(None, description="已死亡CoW实例的自动清理时间")
 
