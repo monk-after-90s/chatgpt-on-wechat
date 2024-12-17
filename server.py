@@ -10,7 +10,7 @@ from asyncio.subprocess import Process
 import asyncio
 from pydantic import BaseModel
 
-app = FastAPI(title="CoW管理服务")
+app = FastAPI(title="CoW管理服务")  # todo 完善文档˚
 
 # 模拟数据库
 cows: dict[int, "CoW"] = {}
