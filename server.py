@@ -166,9 +166,12 @@ class CoW:
                     #     self._status_code = -1
 
                 # 已死亡
-                if self._status_code == 1 and '''Unexpected sync check result: window.synccheck''' in line:  # todo 使用正则
-                    self._status_code = -1
-                    break
+                if self._status_code == 1 and '''Unexpected sync check result: window.synccheck''' in line:
+                    pattern = r'Unexpected sync check result: window\.synccheck=\{retcode:"(\d+)",selector:"(\d+)"\}'
+                    match = re.search(pattern, line)
+                    if match:
+                        self._status_code = -1
+                        break
         finally:
             await self.close()
 
