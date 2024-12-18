@@ -7,20 +7,19 @@ from lib import itchat
 server_path = os.environ.get("UNIX_SOCKET_PATH")
 
 
-async def handle_client(reader, writer):
-    # ToDo 实现：好友列表、聊天记录
+async def handle_client(reader: asyncio.StreamReader, writer: asyncio.StreamWriter):
+    # ToDo 实现：聊天记录
     data = await reader.read(100)
     message = data.decode()
-    addr = writer.get_extra_info('peername')
-    print(f"Received {message} from {addr}")
+    # addr = writer.get_extra_info('peername')
+    # print(f"Received {message} from {addr}")
 
-    friends = await asyncio.get_running_loop().run_in_executor(None, itchat.instance.get_friends)
-    fs = json.dumps(friends)
-    print("Send: %r" % fs)
-    writer.write(fs.encode())
-    await writer.drain()
+    if message == "GET FRIENDS":
+        friends = await asyncio.get_running_loop().run_in_executor(None, itchat.instance.get_friends)
+        fs = json.dumps(friends)
+        writer.write(fs.encode())
+        await writer.drain()
 
-    print("Close the client socket")
     writer.close()
     await writer.wait_closed()
 
