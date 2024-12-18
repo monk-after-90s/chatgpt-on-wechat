@@ -484,3 +484,4 @@ async def delete_cow(cow_id: int):
     await cow.close()
     del cows[cow_id]
     return ResponseItem(code=200, msg="success", data=None)
+# todo 聊天记录列表和实时聊天推送
