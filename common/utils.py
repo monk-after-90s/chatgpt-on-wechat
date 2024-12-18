@@ -1,6 +1,7 @@
 import io
 import os
 import re
+from multiprocessing.connection import Connection
 from urllib.parse import urlparse
 from PIL import Image
 from common.log import logger
@@ -99,3 +100,31 @@ def remove_markdown_symbol(text: str):
     if not text:
         return text
     return re.sub(r'\*\*(.*?)\*\*', r'\1', text)
+
+
+def redirect_and_run(pipe: Connection, _callable: callable):
+    """该函数在子进程中运行，捕捉子进程中调用_callable所有标准输出和标准错误到pipe"""
+    # 在函数内部导入 sys 模块，确保子进程环境中有该模块
+    import sys
+
+    # 替换标准输出和标准错误
+    old_stdout = sys.stdout
+    old_stderr = sys.stderr
+
+    class PipeWriter:
+        def __init__(self, pipe):
+            self.pipe = pipe
+
+        def write(self, message):
+            self.pipe.send(message)
+
+        def flush(self):
+            pass  # 不需要实现 flush
+
+    try:
+        sys.stdout = PipeWriter(pipe)
+        sys.stderr = PipeWriter(pipe)
+        _callable()
+    finally:
+        sys.stdout = old_stdout
+        sys.stderr = old_stderr
