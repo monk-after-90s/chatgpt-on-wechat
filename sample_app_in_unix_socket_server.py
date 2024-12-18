@@ -24,7 +24,7 @@ async def handle_client(reader, writer):
     await writer.wait_closed()
 
 
-async def server():
+async def main():
     try:
         # 如果旧的套接字文件存在，先移除它
         try:
@@ -44,10 +44,6 @@ async def server():
             await f
     except Exception as e:
         print(f"Server error: {e}")
-
-
-async def main():
-    await server()
 
 
 if __name__ == '__main__':
