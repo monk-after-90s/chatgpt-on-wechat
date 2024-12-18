@@ -1,8 +1,11 @@
 import os
 import re
 import sys
+import uuid
 from datetime import datetime, timedelta
 from enum import Enum
+from contextlib import asynccontextmanager
+from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse
@@ -11,6 +14,18 @@ from asyncio.subprocess import Process
 import asyncio
 from pydantic import BaseModel, Field
 from typing import List, Optional
+from concurrent.futures import ProcessPoolExecutor
+
+executor: None | ProcessPoolExecutor = None
+
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    global executor
+    executor = ProcessPoolExecutor()
+    yield
+    executor.shutdown(wait=False)
+
 
 app = FastAPI(title="CoW（chatgpt-on-wechat）管理服务")
 
@@ -49,6 +64,8 @@ class CoW:
         self.log: str = ""
         # 自动清理发生时间
         self.auto_clear_datetime: datetime | None = None
+        # 套接字服务路径
+        self.unix_socket_path: str | Path = ''
 
     @classmethod
     async def create_cow(cls, envs: None | dict = None) -> "CoW":
@@ -120,9 +137,13 @@ class CoW:
 
         # 列表类型的值需要转换为逗号分隔的字符串
         envs_cleaned = {k: ",".join(v) if isinstance(v, list) else v for k, v in envs_cleaned.items()}
-
+        # 套接字路径
+        path = Path("./sockets")
+        path.mkdir(parents=True, exist_ok=True)
+        self.unix_socket_path = path / str(uuid.uuid4())
+        envs_cleaned["UNIX_SOCKET_PATH"] = str(self.unix_socket_path)
         process = await asyncio.create_subprocess_exec(
-            sys.executable, 'app.py',
+            sys.executable, 'sub_unix_socket_server.py',
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
             env=envs_cleaned,
