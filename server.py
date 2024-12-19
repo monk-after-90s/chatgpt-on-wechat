@@ -16,6 +16,7 @@ from pydantic import BaseModel, Field
 from typing import List, Optional
 
 
+# todo 用户久不回的主动提醒，插件？
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
     yield
