@@ -17,7 +17,6 @@ from typing import List, Optional
 
 
 # todo 用户久不回的主动提醒，插件？
-# todo 前端微信昵称
 # todo 创建是接收智能体/模型名称
 # todo 启动/停用
 @asynccontextmanager
@@ -70,6 +69,8 @@ class CoW:
         self.auto_clear_datetime: datetime | None = None
         # 套接字服务路径
         self.unix_socket_path: str | Path = ''
+        # 微信昵称
+        self.wx_nickname: str = ""
 
     @classmethod
     async def create_cow(cls, envs: None | dict = None) -> "CoW":
@@ -193,20 +194,24 @@ class CoW:
                     meet_qrcode = False
 
                 if self._status_code == StatusCodeEnum.TO_LOGIN:
+                    # Define the regex pattern to match the entire log entry and capture the nickname
                     pattern = (
                         r"\[INFO\]\["  # 固定部分 [INFO][
                         r"\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\]\["  # 时间部分
                         r"wechat_channel\.py:\d+\] - "  # 文件名和行号
                         r"Wechat login success, user_id: @"  # 固定文本
-                        r"[a-f0-9]+, nickname: .+"  # 用户ID和昵称部分
+                        r"[a-f0-9]+, nickname: (.+)"  # 用户ID和昵称部分，捕获昵称
                     )
-                    if re.fullmatch(pattern, line):
+
+                    # Search for the pattern in the log string
+                    match = re.search(pattern, line)
+
+                    if match:
+                        print(f"{line=}")
+                        self.wx_nickname = match.group(1)
                         # 工作中
                         self._status_code = StatusCodeEnum.WORKING
                         self.qrcodes.clear()
-                    # elif "Please press confirm on your phone." ==line:
-                    #     self._status_code = -1
-
                 # 已死亡
                 if self._status_code == StatusCodeEnum.WORKING and '''Unexpected sync check result: window.synccheck''' in line:
                     pattern = r'Unexpected sync check result: window\.synccheck=\{retcode:"(\d+)",selector:"(\d+)"\}'
@@ -228,6 +233,7 @@ class StatusCodeEnum(int, Enum):
 class CowItem(BaseModel):
     cow_id: int = Field(..., description="CoW id")
     status_code: StatusCodeEnum = Field(..., description="CoW实例状态码：-1 已死亡，0 待登录，1 工作中")
+    wx_nickname: str = Field("", description="微信昵称")
     qrcodes: List[str] = Field(default_factory=list,
                                description="二维码链接列表，任何一个都可以用于手机微信扫码登录，只在“待登录”状态才会有。注意！“待登录”状态持续太久的话，过几分钟这个列表就会刷新，而老的链接上的二维码会失效，需要重新请求获得最新二维码链接。")
     log: str = Field("", description="日志")
@@ -468,6 +474,7 @@ async def create_cow(cow_config: CoWConfig):
                         msg="success",
                         data=CowItem(cow_id=cow.pid,
                                      status_code=cow.status_code,
+                                     wx_nickname=cow.wx_nickname,
                                      qrcodes=cow.qrcodes,
                                      log=cow.log,
                                      auto_clear_datetime=cow.auto_clear_datetime))
@@ -489,6 +496,7 @@ def get_cow_status(cow_id: int):
                         msg="success",
                         data=CowItem(cow_id=cows[cow_id].pid,
                                      status_code=cows[cow_id].status_code,
+                                     wx_nickname=cows[cow_id].wx_nickname,
                                      qrcodes=cows[cow_id].qrcodes,
                                      log=cows[cow_id].log,
                                      auto_clear_datetime=cows[cow_id].auto_clear_datetime))
@@ -503,6 +511,7 @@ async def get_cows():
                         msg="success",
                         data=[CowItem(cow_id=cow.pid,
                                       status_code=cow.status_code,
+                                      wx_nickname=cow.wx_nickname,
                                       qrcodes=cow.qrcodes,
                                       log=cow.log,
                                       auto_clear_datetime=cow.auto_clear_datetime) for cow in cows.values()])
