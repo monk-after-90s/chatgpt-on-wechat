@@ -7,7 +7,7 @@ from enum import Enum
 from contextlib import asynccontextmanager
 from pathlib import Path
 import shutil
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, HTTPException, Request, Query
 from fastapi.responses import JSONResponse
 from asyncio import Event
 from asyncio.subprocess import Process
@@ -51,8 +51,7 @@ async def custom_404_handler(request: Request, exc):
 
 
 class CoW:
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
+    def __init__(self, ai_name):
         # Status code indicating the state of the CoW.
         # 0 - 待登录
         # 1 - 工作中
@@ -71,11 +70,13 @@ class CoW:
         self.unix_socket_path: str | Path = ''
         # 微信昵称
         self.wx_nickname: str = ""
+        # 智能体/大语言模型名称
+        self.ai_name: str = ai_name
 
     @classmethod
-    async def create_cow(cls, envs: None | dict = None) -> "CoW":
+    async def create_cow(cls, ai_name: str, envs: None | dict = None) -> "CoW":
         """在异步环境创建一个新实例，禁止直接调用类来创建"""
-        cow = CoW()
+        cow = CoW(ai_name=ai_name)
         # 等待子进程创建完毕
         wait_login_event = Event()
         asyncio.create_task(cow._run(envs, wait_login_event=wait_login_event))
@@ -236,6 +237,7 @@ class CowItem(BaseModel):
     wx_nickname: str = Field("", description="微信昵称")
     qrcodes: List[str] = Field(default_factory=list,
                                description="二维码链接列表，任何一个都可以用于手机微信扫码登录，只在“待登录”状态才会有。注意！“待登录”状态持续太久的话，过几分钟这个列表就会刷新，而老的链接上的二维码会失效，需要重新请求获得最新二维码链接。")
+    ai_name: str = Field("", description="对接的智能体或者大语言模型名字")
     log: str = Field("", description="日志")
     auto_clear_datetime: datetime | None = Field(None, description="已死亡CoW实例的自动清理时间")
 
@@ -458,7 +460,8 @@ class ResponseItem(BaseModel):
 
 
 @app.post("/cows/", summary="创建一个新的CoW", response_model=ResponseItem)
-async def create_cow(cow_config: CoWConfig):
+async def create_cow(cow_config: CoWConfig,
+                     ai_name: str = Query("", title="AI Name", description="对接的智能体或者大语言模型名字")):
     """
     创建一个新的CoW进程实例。通常只需要传**open_ai_api_key**、**open_ai_api_base**和**model**。对于智能体平台如fastgpt则不需要**model**。
     各参数解释详见请求体Schema各字段解释，或者查看[chatgpt-on-wechat config.py文件](https://github.com/zhayujie/chatgpt-on-wechat/blob/16324e72837b9898dfaca76897cdcdb27044dc06/config.py#L13)。
@@ -468,7 +471,7 @@ async def create_cow(cow_config: CoWConfig):
     if not cow_config.open_ai_api_base.endswith('/v1'):
         cow_config.open_ai_api_base = cow_config.open_ai_api_base + '/v1'  # 确保以 /api/v1 结尾
 
-    cow = await CoW.create_cow(cow_config.model_dump())
+    cow = await CoW.create_cow(ai_name, cow_config.model_dump())
     cows[cow.pid] = cow
     return ResponseItem(code=200,
                         msg="success",
@@ -477,6 +480,7 @@ async def create_cow(cow_config: CoWConfig):
                                      wx_nickname=cow.wx_nickname,
                                      qrcodes=cow.qrcodes,
                                      log=cow.log,
+                                     ai_name=ai_name,
                                      auto_clear_datetime=cow.auto_clear_datetime))
 
 
@@ -499,6 +503,7 @@ def get_cow_status(cow_id: int):
                                      wx_nickname=cows[cow_id].wx_nickname,
                                      qrcodes=cows[cow_id].qrcodes,
                                      log=cows[cow_id].log,
+                                     ai_name=cows[cow_id].ai_name,
                                      auto_clear_datetime=cows[cow_id].auto_clear_datetime))
 
 
@@ -514,6 +519,7 @@ async def get_cows():
                                       wx_nickname=cow.wx_nickname,
                                       qrcodes=cow.qrcodes,
                                       log=cow.log,
+                                      ai_name=cow.ai_name,
                                       auto_clear_datetime=cow.auto_clear_datetime) for cow in cows.values()])
 
 
