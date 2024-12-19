@@ -17,6 +17,9 @@ from typing import List, Optional
 
 
 # todo 用户久不回的主动提醒，插件？
+# todo 前端微信昵称
+# todo 创建是接收智能体/模型名称
+# todo 启动/停用
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
     yield
@@ -235,7 +238,7 @@ class CoWConfig(BaseModel):
     # openai api配置
     open_ai_api_key: str = Field("", description="OpenAI API兼容的LLM服务的Api Key")
     open_ai_api_base: str = Field("https://api.openai.com/v1",
-                                  description="OpenAI API兼容的LLM服务的base URL，以“/v1”结尾")
+                                  description="OpenAI API兼容的LLM服务的base URL，可以不以“/v1”结尾")
     proxy: Optional[str] = Field(None, description="Proxy for OpenAI requests")
 
     # chatgpt模型
@@ -454,6 +457,11 @@ async def create_cow(cow_config: CoWConfig):
     创建一个新的CoW进程实例。通常只需要传**open_ai_api_key**、**open_ai_api_base**和**model**。对于智能体平台如fastgpt则不需要**model**。
     各参数解释详见请求体Schema各字段解释，或者查看[chatgpt-on-wechat config.py文件](https://github.com/zhayujie/chatgpt-on-wechat/blob/16324e72837b9898dfaca76897cdcdb27044dc06/config.py#L13)。
     """
+    # /v1结尾确认
+    cow_config.open_ai_api_base = cow_config.open_ai_api_base.rstrip('/')  # 去掉尾部的斜杠
+    if not cow_config.open_ai_api_base.endswith('/v1'):
+        cow_config.open_ai_api_base = cow_config.open_ai_api_base + '/v1'  # 确保以 /api/v1 结尾
+
     cow = await CoW.create_cow(cow_config.model_dump())
     cows[cow.pid] = cow
     return ResponseItem(code=200,
