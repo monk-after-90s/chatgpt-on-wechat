@@ -127,6 +127,12 @@ class CoW:
             if q:
                 await q.put(line.decode().strip())
 
+    async def _close_when_wait_login_too_long(self):
+        await asyncio.sleep(600 if os.environ.get("PYTHONUNBUFFERED") == "" else 60)
+        # 状态检查
+        if self.status_code == StatusCodeEnum.TO_LOGIN:
+            await self.close()
+
     async def _run(self, envs: dict | None = None, *, wait_login_event: Event | None = None):
         """实例化进程"""
         # 将 None 替换为空字符串，并确保所有值都是字符串
@@ -167,6 +173,9 @@ class CoW:
                 if line == 'You can also scan QRCode in any website below:':
                     # 待登录
                     self._status_code = StatusCodeEnum.TO_LOGIN
+                    # 久不登录就关闭
+                    asyncio.create_task(self._close_when_wait_login_too_long())
+
                     # 捕获连续的二维码链接
                     meet_qrcode = True
                     self.qrcodes.clear()
