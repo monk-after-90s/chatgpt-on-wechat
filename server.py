@@ -14,17 +14,17 @@ from asyncio.subprocess import Process
 import asyncio
 from pydantic import BaseModel, Field
 from typing import List, Optional
-from concurrent.futures import ProcessPoolExecutor
-
-executor: None | ProcessPoolExecutor = None
 
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
-    global executor
-    executor = ProcessPoolExecutor()
     yield
-    executor.shutdown(wait=False)
+    # 删除文件夹sockets
+    print("Try to delete sockets folder...")
+    try:
+        shutil.rmtree("./sockets")
+    except OSError:
+        pass
 
 
 app = FastAPI(title="CoW（chatgpt-on-wechat）管理服务")
