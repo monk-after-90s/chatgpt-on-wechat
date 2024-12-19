@@ -27,7 +27,7 @@ async def lifespan(_app: FastAPI):
         pass
 
 
-app = FastAPI(title="CoW（chatgpt-on-wechat）管理服务")
+app = FastAPI(title="CoW（chatgpt-on-wechat）管理服务", lifespan=lifespan)
 
 # 模拟数据库
 cows: dict[int, "CoW"] = {}
