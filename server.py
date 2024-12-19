@@ -6,7 +6,7 @@ from datetime import datetime, timedelta
 from enum import Enum
 from contextlib import asynccontextmanager
 from pathlib import Path
-
+import shutil
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse
 from asyncio import Event
@@ -27,7 +27,7 @@ async def lifespan(_app: FastAPI):
         pass
 
 
-app = FastAPI(title="CoW（chatgpt-on-wechat）管理服务")
+app = FastAPI(title="CoW（chatgpt-on-wechat）管理服务", lifespan=lifespan)
 
 # 模拟数据库
 cows: dict[int, "CoW"] = {}
