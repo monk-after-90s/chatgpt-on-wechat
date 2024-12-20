@@ -17,7 +17,6 @@ from typing import List, Optional
 
 
 # todo 用户久不回的主动提醒，插件？
-# todo 启动/停用
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
     yield
@@ -41,11 +40,25 @@ class Model404(BaseModel):
     data: dict = Field(default_factory=dict)
 
 
+class Model400(BaseModel):
+    msg: str = Field(default="Bad Request")
+    code: int = Field(default=400)
+    data: dict = Field(default_factory=dict)
+
+
 @app.exception_handler(404)
 async def custom_404_handler(request: Request, exc):
     return JSONResponse(
         status_code=404,
         content=Model404().model_dump()
+    )
+
+
+@app.exception_handler(400)
+async def custom_400_handler(request: Request, exc):
+    return JSONResponse(
+        status_code=400,
+        content=Model400().model_dump()
     )
 
 
@@ -121,6 +134,12 @@ class CoW:
         if self._p.returncode is not None:
             return StatusCodeEnum.DEAD
         return self._status_code
+
+    @status_code.setter
+    def status_code(self, status_code: "StatusCodeEnum"):
+        self._status_code = status_code
+        if status_code == StatusCodeEnum.DEAD:
+            asyncio.create_task(self.close())
 
     @staticmethod
     async def _read_stream(stream, q: None | asyncio.Queue[str] = None):
@@ -228,10 +247,11 @@ class StatusCodeEnum(int, Enum):
     DEAD = -1  # 已死亡
     TO_LOGIN = 0  # 待登录
     WORKING = 1  # 工作中
+    WORKING_BUT_PAUSE = 2  # 工作中已暂停
 
 
 class CowItem(BaseModel):
-    cow_id: int = Field(..., description="CoW id")
+    cow_id: int = Field(-1, description="CoW id")
     status_code: StatusCodeEnum = Field(..., description="CoW实例状态码：-1 已死亡，0 待登录，1 工作中")
     wx_nickname: str = Field("", description="微信昵称")
     qrcodes: List[str] = Field(default_factory=list,
@@ -537,4 +557,32 @@ async def delete_cow(cow_id: int):
     await cow.close()
     del cows[cow_id]
     return ResponseItem(code=200, msg="success", data=None)
+
+
 # todo 聊天记录列表和实时聊天推送
+
+# PATCH：部分更新资源
+@app.patch("/cows/{cow_id}/", summary="更新一个CoW实例", responses={
+    "200": {"description": "取得目标CoW", "model": ResponseItem},
+    "404": {"description": "未找到目标CoW", "model": Model404}
+})
+async def update_cow(cow_id: int, cow_item: CowItem):
+    """
+    更新一个CoW实例的配置。
+    目前只实现了更新属性status_code在1和2之间的切换。
+    """
+    # 目前只支持更新属性status_code在WORKING_BUT_PAUSE和WORKING之间切换
+    status_code = cow_item.status_code
+    if status_code in [StatusCodeEnum.WORKING_BUT_PAUSE, StatusCodeEnum.WORKING]:
+        if cows[cow_id].status_code != status_code: cows[cow_id].status_code = status_code
+        return ResponseItem(code=200,
+                            msg="success",
+                            data=CowItem(cow_id=cows[cow_id].pid,
+                                         status_code=cows[cow_id].status_code,
+                                         wx_nickname=cows[cow_id].wx_nickname,
+                                         qrcodes=cows[cow_id].qrcodes,
+                                         log=cows[cow_id].log,
+                                         ai_name=cows[cow_id].ai_name,
+                                         auto_clear_datetime=cows[cow_id].auto_clear_datetime))
+    else:
+        raise HTTPException(status_code=400)
