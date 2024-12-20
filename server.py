@@ -569,7 +569,7 @@ async def delete_cow(cow_id: int):
 async def update_cow(cow_id: int, cow_item: CowItem):
     """
     更新一个CoW实例的配置。
-    目前只实现了更新属性status_code在1和2之间的切换。
+    目前只实现了更新属性status_code在1和2之间的切换。todo 实际对聊天的影响
     """
     # 目前只支持更新属性status_code在WORKING_BUT_PAUSE和WORKING之间切换
     status_code = cow_item.status_code
