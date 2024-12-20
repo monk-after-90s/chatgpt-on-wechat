@@ -14,7 +14,7 @@ import asyncio
 from pydantic import BaseModel, Field
 from typing import List, Optional
 
-from common.models import Model404, Model400, StatusCodeEnum, CowItem, CoWConfig, ResponseItem
+from common.models import Model404, Model400, StatusCodeEnum, CowItem, CoWConfig, ResponseItem, WX
 
 
 # todo 用户久不回的主动提醒，插件？
@@ -230,6 +230,7 @@ class CoW:
         finally:
             await self.close()
 
+
 @app.post("/cows/", summary="创建一个新的CoW", response_model=ResponseItem)
 async def create_cow(cow_config: CoWConfig,
                      ai_name: str = Query("", title="AI Name", description="对接的智能体或者大语言模型名字")):
@@ -248,7 +249,7 @@ async def create_cow(cow_config: CoWConfig,
                         msg="success",
                         data=CowItem(cow_id=cow.pid,
                                      status_code=cow.status_code,
-                                     wx_nickname=cow.wx_nickname,
+                                     wx=WX(wx_nickname=cow.wx_nickname),
                                      qrcodes=cow.qrcodes,
                                      log=cow.log,
                                      ai_name=ai_name,
@@ -271,7 +272,7 @@ def get_cow_status(cow_id: int):
                         msg="success",
                         data=CowItem(cow_id=cows[cow_id].pid,
                                      status_code=cows[cow_id].status_code,
-                                     wx_nickname=cows[cow_id].wx_nickname,
+                                     wx=WX(wx_nickname=cows[cow_id].wx_nickname),
                                      qrcodes=cows[cow_id].qrcodes,
                                      log=cows[cow_id].log,
                                      ai_name=cows[cow_id].ai_name,
@@ -287,7 +288,7 @@ async def get_cows():
                         msg="success",
                         data=[CowItem(cow_id=cow.pid,
                                       status_code=cow.status_code,
-                                      wx_nickname=cow.wx_nickname,
+                                      wx=WX(wx_nickname=cow.wx_nickname),
                                       qrcodes=cow.qrcodes,
                                       log=cow.log,
                                       ai_name=cow.ai_name,
@@ -331,7 +332,7 @@ async def update_cow(cow_id: int, cow_item: CowItem):
                             msg="success",
                             data=CowItem(cow_id=cows[cow_id].pid,
                                          status_code=cows[cow_id].status_code,
-                                         wx_nickname=cows[cow_id].wx_nickname,
+                                         wx=WX(wx_nickname=cows[cow_id].wx_nickname),
                                          qrcodes=cows[cow_id].qrcodes,
                                          log=cows[cow_id].log,
                                          ai_name=cows[cow_id].ai_name,

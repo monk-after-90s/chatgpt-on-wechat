@@ -16,10 +16,16 @@ class Model400(BaseModel):
     data: dict = Field(default_factory=dict)
 
 
+class WX(BaseModel):
+    wx_nickname: str = Field("", description="微信昵称")
+    avatar_url: str = Field("", description="头像链接")
+    friends: List = Field(default_factory=list, description="好友列表")
+
+
 class CowItem(BaseModel):
     cow_id: int = Field(-1, description="CoW id")
     status_code: "StatusCodeEnum" = Field(..., description="CoW实例状态码：-1 已死亡，0 待登录，1 工作中")
-    wx_nickname: str = Field("", description="微信昵称")
+    wx: WX = Field(WX(), description="微信信息")
     qrcodes: List[str] = Field(default_factory=list,
                                description="二维码链接列表，任何一个都可以用于手机微信扫码登录，只在“待登录”状态才会有。注意！“待登录”状态持续太久的话，过几分钟这个列表就会刷新，而老的链接上的二维码会失效，需要重新请求获得最新二维码链接。")
     ai_name: str = Field("", description="对接的智能体或者大语言模型名字")
@@ -246,9 +252,7 @@ class CoWConfig(BaseModel):
     web_port: int = Field(9899, description="Web server port")
 
 
-
 class ResponseItem(BaseModel):
     code: int = Field(200, description="Response code")
     msg: str = Field("success", description="Response message")
     data: CowItem | List[CowItem] | None = Field(None, description="Response data")
-
