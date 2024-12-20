@@ -16,10 +16,45 @@ class Model400(BaseModel):
     data: dict = Field(default_factory=dict)
 
 
+class ContactInfo(BaseModel):
+    MemberList: List = Field(default_factory=list)
+    UserName: str = Field("", description="单次运行CoW实例时，获取到的好友名，唯一标识")
+    City: str = ""
+    DisplayName: str = ""
+    PYQuanPin: str = ""
+    RemarkPYInitial: str = ""
+    Province: str = ""
+    KeyWord: str = ""
+    RemarkName: str = Field("", description="备注名")
+    PYInitial: str = ""
+    EncryChatRoomId: str = ""
+    Alias: str = ""
+    Signature: str = Field("", description="个性签名")
+    NickName: str = Field("", description="微信名字，在手机微信里在“我——微信号——名字”")
+    RemarkPYQuanPin: str = ""
+    HeadImgUrl: str = Field("", description="头像链接")
+    UniFriend: int = 0
+    Sex: int = 0
+    AppAccountFlag: int = 0
+    VerifyFlag: int = 0
+    ChatRoomId: int = 0
+    HideInputBarFlag: int = 0
+    AttrStatus: int = 0
+    SnsFlag: int = 0
+    MemberCount: int = 0
+    OwnerUin: int = 0
+    ContactFlag: int = 0
+    Uin: int = 0
+    StarFriend: int = 0
+    Statues: int = 0
+    WebWxPluginSwitch: int = 0
+    HeadImgFlag: int = 0
+
+
 class WX(BaseModel):
     wx_nickname: str = Field("", description="微信昵称")
-    avatar_url: str = Field("", description="头像链接")
-    friends: List = Field(default_factory=list, description="好友列表")
+    head_img_url: str = Field("", description="头像链接")
+    friends: List[ContactInfo] = Field(default_factory=list, description="好友列表")
 
 
 class CowItem(BaseModel):

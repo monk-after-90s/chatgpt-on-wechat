@@ -1,3 +1,4 @@
+import json
 import os
 import re
 import sys
@@ -14,7 +15,7 @@ import asyncio
 from pydantic import BaseModel, Field
 from typing import List, Optional
 
-from common.models import Model404, Model400, StatusCodeEnum, CowItem, CoWConfig, ResponseItem, WX
+from common.models import Model404, Model400, StatusCodeEnum, CowItem, CoWConfig, ResponseItem, WX, ContactInfo
 
 
 # todo 用户久不回的主动提醒，插件？
@@ -73,6 +74,18 @@ class CoW:
         self.wx_nickname: str = ""
         # 智能体/大语言模型名称
         self.ai_name: str = ai_name
+
+    async def wx_friends(self) -> List[dict]:
+        """获取微信好友列表"""
+        reader, writer = await asyncio.open_unix_connection(self.unix_socket_path)
+        try:
+            writer.write(b"GET FRIENDS")
+            asyncio.create_task(writer.drain())
+            data = await reader.read(32768)
+            fs = json.loads(data.decode())
+            return fs
+        finally:
+            writer.close()
 
     @classmethod
     async def create_cow(cls, ai_name: str, envs: None | dict = None) -> "CoW":
@@ -215,7 +228,7 @@ class CoW:
                     match = re.search(pattern, line)
 
                     if match:
-                        print(f"{line=}")
+                        # print(f"{line=}")
                         self.wx_nickname = match.group(1)
                         # 工作中
                         self._status_code = StatusCodeEnum.WORKING
@@ -245,11 +258,15 @@ async def create_cow(cow_config: CoWConfig,
 
     cow = await CoW.create_cow(ai_name, cow_config.model_dump())
     cows[cow.pid] = cow
+    friends = await cow.wx_friends()
+    fs: List[ContactInfo] = [ContactInfo(**f) for f in friends]
     return ResponseItem(code=200,
                         msg="success",
                         data=CowItem(cow_id=cow.pid,
                                      status_code=cow.status_code,
-                                     wx=WX(wx_nickname=cow.wx_nickname),
+                                     wx=WX(wx_nickname=cow.wx_nickname,
+                                           head_img_url=fs[0].HeadImgUrl if fs else "",
+                                           friends=fs),
                                      qrcodes=cow.qrcodes,
                                      log=cow.log,
                                      ai_name=ai_name,
@@ -261,18 +278,22 @@ async def create_cow(cow_config: CoWConfig,
              "200": {"description": "取得目标CoW", "model": ResponseItem},
              "404": {"description": "未找到目标CoW", "model": Model404}
          })
-def get_cow_status(cow_id: int):
+async def get_cow_status(cow_id: int):
     """
     获取指定CoW的运行信息。
     """
     if cow_id not in cows:
         raise HTTPException(status_code=404)
 
+    friends = await cows[cow_id].wx_friends()
+    fs: List[ContactInfo] = [ContactInfo(**f) for f in friends]
     return ResponseItem(code=200,
                         msg="success",
                         data=CowItem(cow_id=cows[cow_id].pid,
                                      status_code=cows[cow_id].status_code,
-                                     wx=WX(wx_nickname=cows[cow_id].wx_nickname),
+                                     wx=WX(wx_nickname=cows[cow_id].wx_nickname,
+                                           head_img_url=fs[0].HeadImgUrl if fs else "",
+                                           friends=fs),
                                      qrcodes=cows[cow_id].qrcodes,
                                      log=cows[cow_id].log,
                                      ai_name=cows[cow_id].ai_name,
@@ -284,15 +305,24 @@ async def get_cows():
     """
     响应格式详看响应体Schema。
     """
+
+    async def generate_cow_item(_cow):
+        friends = await _cow.wx_friends()
+        fs: List[ContactInfo] = [ContactInfo(**f) for f in friends]
+        return CowItem(cow_id=_cow.pid,
+                       status_code=_cow.status_code,
+                       wx=WX(wx_nickname=_cow.wx_nickname,
+                             head_img_url=fs[0].HeadImgUrl if fs else "",
+                             friends=fs),
+                       qrcodes=_cow.qrcodes,
+                       log=_cow.log,
+                       ai_name=_cow.ai_name,
+                       auto_clear_datetime=_cow.auto_clear_datetime)
+
     return ResponseItem(code=200,
                         msg="success",
-                        data=[CowItem(cow_id=cow.pid,
-                                      status_code=cow.status_code,
-                                      wx=WX(wx_nickname=cow.wx_nickname),
-                                      qrcodes=cow.qrcodes,
-                                      log=cow.log,
-                                      ai_name=cow.ai_name,
-                                      auto_clear_datetime=cow.auto_clear_datetime) for cow in cows.values()])
+                        data=[await task for task in
+                              [asyncio.create_task(generate_cow_item(cow)) for cow in cows.values()]])
 
 
 @app.delete("/cows/{cow_id}/", summary="删除一个CoW实例", responses={
@@ -328,11 +358,15 @@ async def update_cow(cow_id: int, cow_item: CowItem):
     status_code = cow_item.status_code
     if status_code in [StatusCodeEnum.WORKING_BUT_PAUSE, StatusCodeEnum.WORKING]:
         if cows[cow_id].status_code != status_code: cows[cow_id].status_code = status_code
+        friends = await cows[cow_id].wx_friends()
+        fs: List[ContactInfo] = [ContactInfo(**f) for f in friends]
         return ResponseItem(code=200,
                             msg="success",
                             data=CowItem(cow_id=cows[cow_id].pid,
                                          status_code=cows[cow_id].status_code,
-                                         wx=WX(wx_nickname=cows[cow_id].wx_nickname),
+                                         wx=WX(wx_nickname=cows[cow_id].wx_nickname,
+                                               head_img_url=fs[0].HeadImgUrl if fs else "",
+                                               friends=fs),
                                          qrcodes=cows[cow_id].qrcodes,
                                          log=cows[cow_id].log,
                                          ai_name=cows[cow_id].ai_name,
