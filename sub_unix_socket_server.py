@@ -8,7 +8,6 @@ server_path = os.environ.get("UNIX_SOCKET_PATH")
 
 
 async def handle_client(reader: asyncio.StreamReader, writer: asyncio.StreamWriter):
-    # ToDo 实现：聊天记录
     msg = await reader.read(100)
     # addr = writer.get_extra_info('peername')
     # print(f"Received {message} from {addr}")

@@ -53,7 +53,7 @@ class ContactInfo(BaseModel):
 
 class WX(BaseModel):
     wx_nickname: str = Field("", description="微信昵称")
-    head_img_url: str = Field("", description="头像链接")
+    head_img_url: str = Field("", description="头像链接")  # todo 完善为完整的链接
     friends: List[ContactInfo] = Field(default_factory=list, description="好友列表")
 
 
