@@ -195,6 +195,8 @@ class CoW:
                 self.log += line + "\n"
                 self.log = self.log[-10000:]
                 ################状态更新区################
+                if os.getenv("PYTHONUNBUFFERED") == "1":
+                    print(line.strip())
                 if line == 'You can also scan QRCode in any website below:':
                     # 待登录
                     self._status_code = StatusCodeEnum.TO_LOGIN
