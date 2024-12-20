@@ -9,17 +9,17 @@ server_path = os.environ.get("UNIX_SOCKET_PATH")
 
 async def handle_client(reader: asyncio.StreamReader, writer: asyncio.StreamWriter):
     # ToDo 实现：聊天记录
-    data = await reader.read(100)
-    message = data.decode()
+    msg = await reader.read(100)
     # addr = writer.get_extra_info('peername')
     # print(f"Received {message} from {addr}")
 
-    if message == "GET FRIENDS":
+    data: bytes = b''
+    if msg == b"GET FRIENDS":
         friends = await asyncio.get_running_loop().run_in_executor(None, itchat.instance.get_friends)
-        fs = json.dumps(friends)
-        writer.write(fs.encode())
-        await writer.drain()
-
+        data = json.dumps(friends).encode()
+    # ToDo 聊天记录 ChatGPT bot实例.session.messages
+    writer.write(data)
+    await writer.drain()
     writer.close()
     await writer.wait_closed()
 
@@ -44,6 +44,7 @@ async def main():
             await f
     except Exception as e:
         print(f"Server error: {e}")
+        os.unlink(server_path)
 
 
 if __name__ == '__main__':
