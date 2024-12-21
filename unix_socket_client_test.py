@@ -18,7 +18,7 @@ async def unix_domain_socket_client(message, path):
 
 async def main():
     server_path = './mysocket'  # 这应该与服务器端的路径一致
-    message = 'Hello Unix Socket Server!'
+    message = 'SWITCH ON'
 
     try:
         await unix_domain_socket_client(message, server_path)

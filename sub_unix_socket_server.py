@@ -3,6 +3,9 @@ import json
 import os
 from app import run
 from lib import itchat
+from plugins import PluginManager
+
+# from plugins.switch import Switch
 
 server_path = os.environ.get("UNIX_SOCKET_PATH")
 
@@ -12,10 +15,16 @@ async def handle_client(reader: asyncio.StreamReader, writer: asyncio.StreamWrit
     # addr = writer.get_extra_info('peername')
     # print(f"Received {message} from {addr}")
 
-    data: bytes = b''
+    data: bytes = b'{}'
     if msg == b"GET FRIENDS":
         friends = await asyncio.get_running_loop().run_in_executor(None, itchat.instance.get_friends)
         data = json.dumps(friends).encode()
+    elif msg == b"SWITCH ON":
+        plugins = PluginManager().list_plugins()
+        plugins["SWITCH"].switch = True
+    elif msg == b"SWITCH OFF":
+        plugins = PluginManager().list_plugins()
+        plugins["SWITCH"].switch = False
     # ToDo 聊天记录 ChatGPT bot实例.session.messages
     writer.write(data)
     await writer.drain()

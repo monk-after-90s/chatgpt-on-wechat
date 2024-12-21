@@ -77,15 +77,7 @@ class CoW:
 
     async def wx_friends(self) -> List[dict]:
         """获取微信好友列表"""
-        reader, writer = await asyncio.open_unix_connection(self.unix_socket_path)
-        try:
-            writer.write(b"GET FRIENDS")
-            asyncio.create_task(writer.drain())
-            data = await reader.read(32768)
-            fs = json.loads(data.decode())
-            return fs
-        finally:
-            writer.close()
+        return await self.communicate_cow_process(b"GET FRIENDS")
 
     @classmethod
     async def create_cow(cls, ai_name: str, envs: None | dict = None) -> "CoW":
@@ -142,6 +134,21 @@ class CoW:
         self._status_code = status_code
         if status_code == StatusCodeEnum.DEAD:
             asyncio.create_task(self.close())
+        elif status_code == StatusCodeEnum.WORKING:  # 切换到工作中
+            asyncio.create_task(self.communicate_cow_process(b"SWITCH ON"))
+        elif status_code == StatusCodeEnum.WORKING_BUT_PAUSE:  # 切换到工作中的暂停
+            asyncio.create_task(self.communicate_cow_process(b"SWITCH OFF"))
+
+    async def communicate_cow_process(self, cmd: str | bytes):
+        reader, writer = await asyncio.open_unix_connection(self.unix_socket_path)
+        try:
+            writer.write(cmd if isinstance(cmd, bytes) else cmd.encode())
+            asyncio.create_task(writer.drain())
+            data = await reader.read(32768)
+            fs = json.loads(data.decode())
+            return fs
+        finally:
+            writer.close()
 
     @staticmethod
     async def _read_stream(stream, q: None | asyncio.Queue[str] = None):
