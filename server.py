@@ -86,6 +86,7 @@ class CoW:
 
     async def wx_friends(self) -> List[dict]:
         """获取微信好友列表"""
+        if self._client_session.closed: return []
         async with self._client_session.get('http://unix/friends/') as response:
             fs = await response.json()
             return fs
@@ -119,7 +120,7 @@ class CoW:
         self._is_closed = True
         self._p and self._p.returncode is None and self._p.terminate()
         await asyncio.sleep(1)
-        self._p and self._p.returncode is None and self._p.kill()# todo 检查子进程死亡情况
+        self._p and self._p.returncode is None and self._p.kill()  # todo 检查子进程死亡情况
         try:
             self._p and self._p.returncode is None and await self._p.wait()
         except Exception as e:
@@ -165,6 +166,7 @@ class CoW:
             asyncio.create_task(self._switch_cow_in_process(False))
 
     async def _switch_cow_in_process(self, switch: bool):
+        if self._client_session.closed: return
         async with self._client_session.post('http://unix/switch/', json={"switch": switch}) as response:
             await response.json()
 
