@@ -7,6 +7,7 @@ from datetime import datetime, timedelta
 from contextlib import asynccontextmanager
 from pathlib import Path
 import shutil
+import aiohttp
 from fastapi import FastAPI, HTTPException, Request, Query
 from fastapi.responses import JSONResponse
 from asyncio import Event
@@ -72,7 +73,12 @@ class CoW:
         # 自动清理发生时间
         self.auto_clear_datetime: datetime | None = None
         # 套接字服务路径
-        self.unix_socket_path: str | Path = ''
+        self._unix_socket_path: str | Path = ''
+        # unix请求环境
+        # async with aiohttp.UnixConnector(path=server_path) as connector:
+        #     async with aiohttp.ClientSession(connector=connector) as session:
+        self._unix_connector: None | aiohttp.UnixConnector = None
+        self._client_session: None | aiohttp.ClientSession = None
         # 微信昵称
         self.wx_nickname: str = ""
         # 智能体/大语言模型名称
@@ -80,7 +86,9 @@ class CoW:
 
     async def wx_friends(self) -> List[dict]:
         """获取微信好友列表"""
-        return await self.communicate_cow_process(b"GET FRIENDS")
+        async with self._client_session.get('http://unix/friends/') as response:
+            fs = await response.json()
+            return fs
 
     @classmethod
     async def create_cow(cls, ai_name: str, envs: None | dict = None) -> "CoW":
@@ -99,6 +107,15 @@ class CoW:
 
     async def close(self):
         """优雅关闭"""
+
+        # unix连接清理
+        async def clear_unix_socket():
+            if self._client_session: await self._client_session.close()
+            if self._unix_connector: await self._unix_connector.close()
+            if os.path.exists(self._unix_socket_path): os.unlink(self._unix_socket_path)
+
+        unix_clear_task = asyncio.create_task(clear_unix_socket())
+        # 进程清理
         self._is_closed = True
         self._p and self._p.returncode is None and self._p.terminate()
         await asyncio.sleep(1)
@@ -114,6 +131,11 @@ class CoW:
         # 自动清发生的datetime
         self.auto_clear_datetime = \
             self.auto_clear_datetime or datetime.now().astimezone() + timedelta(seconds=delay_seconds)
+
+        # 调试
+        if os.environ.get("PYTHONUNBUFFERED") == "1":
+            await unix_clear_task
+            return
 
     @property
     def pid(self):
@@ -138,20 +160,13 @@ class CoW:
         if status_code == StatusCodeEnum.DEAD:
             asyncio.create_task(self.close())
         elif status_code == StatusCodeEnum.WORKING:  # 切换到工作中
-            asyncio.create_task(self.communicate_cow_process(b"SWITCH ON"))
+            asyncio.create_task(self._switch_cow_in_process(True))
         elif status_code == StatusCodeEnum.WORKING_BUT_PAUSE:  # 切换到工作中的暂停
-            asyncio.create_task(self.communicate_cow_process(b"SWITCH OFF"))
+            asyncio.create_task(self._switch_cow_in_process(False))
 
-    async def communicate_cow_process(self, cmd: str | bytes):
-        reader, writer = await asyncio.open_unix_connection(self.unix_socket_path)
-        try:
-            writer.write(cmd if isinstance(cmd, bytes) else cmd.encode())
-            asyncio.create_task(writer.drain())
-            data = await reader.read(32768)
-            fs = json.loads(data.decode())
-            return fs
-        finally:
-            writer.close()
+    async def _switch_cow_in_process(self, switch: bool):
+        async with self._client_session.post('http://unix/switch/', json={"switch": switch}) as response:
+            await response.json()
 
     @staticmethod
     async def _read_stream(stream, q: None | asyncio.Queue[str] = None):
@@ -182,8 +197,11 @@ class CoW:
         # 套接字路径
         path = Path("./sockets")
         path.mkdir(parents=True, exist_ok=True)
-        self.unix_socket_path = path / str(uuid.uuid4())
-        envs_cleaned["UNIX_SOCKET_PATH"] = str(self.unix_socket_path)
+        self._unix_socket_path = path / str(uuid.uuid4())
+        envs_cleaned["UNIX_SOCKET_PATH"] = str(self._unix_socket_path)
+        # unix socket 客户端初始化
+        self._unix_connector = aiohttp.UnixConnector(path=str(self._unix_socket_path))
+        self._client_session = aiohttp.ClientSession(connector=self._unix_connector)
         process = await asyncio.create_subprocess_exec(
             sys.executable, 'sub_unix_socket_server.py',
             stdout=asyncio.subprocess.PIPE,

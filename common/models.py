@@ -291,3 +291,7 @@ class ResponseItem(BaseModel):
     code: int = Field(200, description="Response code")
     msg: str = Field("success", description="Response message")
     data: CowItem | List[CowItem] | None = Field(None, description="Response data")
+
+
+class SwitchItem(BaseModel):
+    switch: bool = Field(False, description="Switch status")
