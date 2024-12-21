@@ -119,7 +119,7 @@ class CoW:
         self._is_closed = True
         self._p and self._p.returncode is None and self._p.terminate()
         await asyncio.sleep(1)
-        self._p and self._p.returncode is None and self._p.kill()
+        self._p and self._p.returncode is None and self._p.kill()# todo 检查子进程死亡情况
         try:
             self._p and self._p.returncode is None and await self._p.wait()
         except Exception as e:
