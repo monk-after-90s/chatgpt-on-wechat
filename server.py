@@ -12,8 +12,7 @@ from fastapi.responses import JSONResponse
 from asyncio import Event
 from asyncio.subprocess import Process
 import asyncio
-from pydantic import BaseModel, Field
-from typing import List, Optional
+from typing import List
 
 from common.models import Model404, Model400, StatusCodeEnum, CowItem, CoWConfig, ResponseItem, WX, ContactInfo
 
@@ -21,6 +20,10 @@ from common.models import Model404, Model400, StatusCodeEnum, CowItem, CoWConfig
 # todo 用户久不回的主动提醒，插件？
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
+    try:
+        shutil.rmtree("./sockets")
+    except OSError:
+        pass
     yield
     # 删除文件夹sockets
     print("Try to delete sockets folder...")
